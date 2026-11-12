@@ -6,12 +6,9 @@
         <div class="flex items-center space-x-2">
           <span class="text-xl">⚡</span>
           <span class="font-bold text-sm tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Outlook Graph 批量工作台
+            Outlook 批量邮箱工作台
           </span>
         </div>
-        <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono font-medium">
-          Cloudflare Pages Fullstack
-        </span>
       </div>
 
       <div class="flex items-center space-x-2.5">
@@ -46,7 +43,7 @@
             v-if="currentUser.role === 'admin'"
             @click="showAdminModal = true"
             class="px-2 py-1 rounded-lg text-xs font-medium bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 transition flex items-center space-x-1"
-            title="打开超级管理员后台"
+            title="打开用户管理"
           >
             <span>🛡️</span>
             <span class="hidden sm:inline">用户管理</span>

@@ -9,7 +9,7 @@
       <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
         <h2 class="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center space-x-2">
           <span>🔑</span>
-          <span>修改个人密码</span>
+          <span>修改密码</span>
         </h2>
         <button
           @click="$emit('close')"

@@ -12,10 +12,10 @@
           <span class="text-xl">🛡️</span>
           <div>
             <h2 class="text-base font-bold text-zinc-900 dark:text-zinc-100">
-              超级管理员管控后台
+              用户管理
             </h2>
             <p class="text-xs text-zinc-500 dark:text-zinc-400">
-              全系统用户生命周期、权限分配与资产概览
+              查看并管理系统用户及权限
             </p>
           </div>
         </div>
@@ -50,7 +50,7 @@
                 <th class="py-3 px-3">Outlook 邮箱数</th>
                 <th class="py-3 px-3">注册时间</th>
                 <th class="py-3 px-3">最后登录</th>
-                <th class="py-3 px-4 text-right">管控操作</th>
+                <th class="py-3 px-4 text-right">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800/60">
@@ -259,7 +259,7 @@ async function openResetPassword(user: any) {
 }
 
 async function handleDeleteUser(user: any) {
-  if (!confirm(`⚠️ 危险操作：确定要彻底删除用户 "${user.username}" 吗？\n该用户名下的所有 Outlook 邮箱凭证及邮件记录将被物理删除，且不可恢复！`)) {
+  if (!confirm(`确定要彻底删除用户 "${user.username}" 吗？\n该用户名下的所有邮箱数据及邮件记录将被一并删除，且无法恢复。`)) {
     return;
   }
   try {

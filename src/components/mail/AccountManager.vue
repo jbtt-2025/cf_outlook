@@ -4,9 +4,9 @@
     <div class="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <span>👥</span> 账号资产与状态管理
+          <span>👥</span> 账号管理
         </h2>
-        <p class="text-xs text-zinc-500 mt-0.5">本地 IndexedDB 已安全持久化 {{ accounts.length }} 个账号，所有 Refresh Token 实时自动滚动回写</p>
+        <p class="text-xs text-zinc-500 mt-0.5">共 {{ accounts.length }} 个账号</p>
       </div>
 
       <div class="flex items-center space-x-2">
@@ -156,9 +156,9 @@
                 <button
                   @click="copy(acc.refresh_token)"
                   class="px-2 py-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded text-[11px] transition"
-                  title="复制当前最新 Refresh Token"
+                  title="复制当前最新 Token"
                 >
-                  复制 RT
+                  复制 Token
                 </button>
                 <button
                   @click="$emit('delete', acc.id)"

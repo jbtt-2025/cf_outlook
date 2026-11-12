@@ -5,9 +5,9 @@
       <div class="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
         <div>
           <h3 class="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <span>💾</span> 导出账号与滚动凭证
+            <span>💾</span> 导出账号与凭证
           </h3>
-          <p class="text-xs text-zinc-500 mt-0.5">导出的文件 100% 包含微软签发的最新滚动 Refresh Token</p>
+          <p class="text-xs text-zinc-500 mt-0.5">导出当前账号列表及最新凭证信息</p>
         </div>
         <button
           @click="$emit('close')"
@@ -29,7 +29,7 @@
             >
               <option value="all">全部账号 ({{ accounts.length }})</option>
               <option value="active">仅正常活跃账号 ({{ activeCount }})</option>
-              <option value="dead">仅失效死号 ({{ deadCount }})</option>
+              <option value="dead">仅失效账号 ({{ deadCount }})</option>
               <option value="empty">仅空箱账号 ({{ emptyCount }})</option>
             </select>
           </div>
@@ -40,8 +40,8 @@
               v-model="format"
               class="w-full p-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 focus:outline-none"
             >
-              <option value="two_parts">极简两段式 (email----rt)</option>
-              <option value="four_parts">经典四段式 (email----pwd----client----rt)</option>
+              <option value="two_parts">两段式 (邮箱----Token)</option>
+              <option value="four_parts">四段式 (邮箱----密码----Client ID----Token)</option>
               <option value="jsonl">JSON Lines (.jsonl)</option>
               <option value="csv">逗号分隔符 (.csv)</option>
             </select>

@@ -5,9 +5,9 @@
       <div class="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
         <div>
           <h3 class="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <span>📥</span> 批量导入 Outlook 凭证
+            <span>📥</span> 批量导入账号凭证
           </h3>
-          <p class="text-xs text-zinc-500 mt-0.5">支持粘贴多格式文本导入，凭证安全持久化在您的 Cloudflare D1 数据库中</p>
+          <p class="text-xs text-zinc-500 mt-0.5">支持粘贴多格式文本批量导入</p>
         </div>
         <button
           @click="$emit('close')"
@@ -23,7 +23,7 @@
         <div>
           <div class="flex items-center justify-between mb-1.5">
             <label class="font-semibold text-zinc-700 dark:text-zinc-300">
-              粘贴凭证文本（支持多行批量输入）：
+              粘贴凭证文本（支持多行输入）：
             </label>
             <span class="text-zinc-400 font-mono">已解析 {{ parsedAccounts.length }} 个账号</span>
           </div>
@@ -34,7 +34,7 @@
 email----refresh_token
 email----password----refresh_token
 email----password----client_id----refresh_token
-或直接粘贴 JSON/JSONL/CSV 内容"
+或直接粘贴 JSON / JSONL / CSV 文本"
             class="w-full p-3 font-mono text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           ></textarea>
         </div>
@@ -43,14 +43,14 @@ email----password----client_id----refresh_token
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-zinc-50 dark:bg-zinc-950/60 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
           <!-- 重复处理策略 -->
           <div>
-            <label class="block font-medium text-zinc-700 dark:text-zinc-300 mb-1">遇到重复邮箱处理策略：</label>
+            <label class="block font-medium text-zinc-700 dark:text-zinc-300 mb-1">重复邮箱处理策略：</label>
             <select
               v-model="dedupStrategy"
               class="w-full p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 focus:outline-none"
             >
-              <option value="overwrite">覆盖更新 RT (推荐，保持最新凭据)</option>
-              <option value="skip">跳过已存在邮箱</option>
-              <option value="merge_tags">保留新凭据并合并标签</option>
+              <option value="overwrite">覆盖已存在账号 (推荐)</option>
+              <option value="skip">跳过已存在账号</option>
+              <option value="merge_tags">更新凭证并合并标签</option>
             </select>
           </div>
 

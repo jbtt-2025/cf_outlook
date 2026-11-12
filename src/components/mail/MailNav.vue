@@ -57,7 +57,7 @@
           <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
           </svg>
-          <span>账号资产管理</span>
+          <span>账号管理</span>
         </div>
         <span class="text-[11px] text-zinc-400 font-mono">
           {{ accounts.length }}
@@ -65,34 +65,34 @@
       </button>
     </div>
 
-    <!-- 资产体检状态概览 -->
+    <!-- 账号状态统计 -->
     <div class="mx-3 my-2 p-3 bg-white dark:bg-zinc-950/70 border border-zinc-200/80 dark:border-zinc-800 rounded-lg space-y-2">
       <div class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-        <span>资产健康看板</span>
+        <span>账号状态</span>
         <span v-if="runningJobs > 0" class="text-blue-500 text-[10px] animate-pulse">
-          {{ runningJobs }} 并发运行中
+          {{ runningJobs }} 个任务运行中
         </span>
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="p-2 bg-emerald-50/60 dark:bg-emerald-950/30 rounded border border-emerald-100 dark:border-emerald-900/40">
-          <div class="text-emerald-700 dark:text-emerald-400 text-xs font-medium">有效正常</div>
+          <div class="text-emerald-700 dark:text-emerald-400 text-xs font-medium">正常</div>
           <div class="text-base font-bold text-emerald-800 dark:text-emerald-300 font-mono">{{ activeCount }}</div>
         </div>
         <div class="p-2 bg-rose-50/60 dark:bg-rose-950/30 rounded border border-rose-100 dark:border-rose-900/40">
-          <div class="text-rose-700 dark:text-rose-400 text-xs font-medium">失效死号</div>
+          <div class="text-rose-700 dark:text-rose-400 text-xs font-medium">已失效</div>
           <div class="text-base font-bold text-rose-800 dark:text-rose-300 font-mono">{{ deadCount }}</div>
         </div>
       </div>
       <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
-        <span>限流冷却: <b class="text-orange-500">{{ rateLimitedCount }}</b></span>
-        <span>空箱待命: <b class="text-zinc-600 dark:text-zinc-400">{{ emptyCount }}</b></span>
+        <span>限流: <b class="text-orange-500">{{ rateLimitedCount }}</b></span>
+        <span>空箱: <b class="text-zinc-600 dark:text-zinc-400">{{ emptyCount }}</b></span>
       </div>
     </div>
 
-    <!-- 轮询调度控制器 -->
+    <!-- 定时刷新与调度 -->
     <div class="mx-3 mb-2 p-3 bg-white dark:bg-zinc-950/70 border border-zinc-200/80 dark:border-zinc-800 rounded-lg space-y-2.5">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">自动智能轮询</span>
+        <span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">自动定时刷新</span>
         <button
           @click="$emit('toggle-polling')"
           class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
@@ -106,7 +106,7 @@
       </div>
 
       <div class="flex items-center justify-between text-xs text-zinc-500">
-        <span>并发调度池 ({{ concurrency }})</span>
+        <span>并发拉取数 ({{ concurrency }})</span>
         <input
           type="range"
           min="1"
@@ -120,7 +120,7 @@
       <!-- 自动拉取周期设置 (默认 180S，可手动修改) -->
       <div class="space-y-1.5 pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
         <div class="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
-          <span>拉取周期</span>
+          <span>刷新间隔</span>
           <div class="flex items-center space-x-1">
             <input
               type="number"
@@ -170,7 +170,7 @@
         class="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-medium transition disabled:opacity-50"
       >
         <span>⚡</span>
-        <span>{{ runningJobs > 0 ? `正在体检中 (${runningJobs})...` : '批量全量体检' }}</span>
+        <span>{{ runningJobs > 0 ? `正在同步中 (${runningJobs})...` : '一键同步所有' }}</span>
       </button>
 
       <div class="grid grid-cols-2 gap-1.5">
@@ -178,7 +178,7 @@
           @click="$emit('purge-dead')"
           :disabled="deadCount === 0"
           class="py-1.5 px-2 bg-white dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-zinc-200 dark:border-zinc-700 hover:border-rose-300 dark:hover:border-rose-900 rounded-lg text-xs font-medium transition disabled:opacity-40 text-center"
-          title="物理删除所有标记为 dead 的账号"
+          title="清理所有已失效的账号"
         >
           🧹 清理失效
         </button>
@@ -186,7 +186,7 @@
         <button
           @click="$emit('open-export')"
           class="py-1.5 px-2 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-medium transition text-center"
-          title="导出带有滚动最新 RT 的凭证文件"
+          title="导出账号凭证文件"
         >
           💾 导出凭证
         </button>

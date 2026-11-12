@@ -15,7 +15,7 @@
               {{ hasAdmin ? (activeTab === 'login' ? '用户登录' : '新用户注册') : '系统初始化向导' }}
             </h2>
             <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              {{ hasAdmin ? 'Outlook Graph 批量工作台服务登录' : '请先注册系统的首任超级管理员账号' }}
+              {{ hasAdmin ? '登录您的工作台账号' : '请创建系统的管理员账号' }}
             </p>
           </div>
         </div>
@@ -30,7 +30,7 @@
             <span>未检测到 Cloudflare D1 数据库绑定</span>
           </div>
           <p class="text-[11px] leading-relaxed opacity-90">
-            请前往 Cloudflare Pages 后台 <b>【设置】->【Functions】->【D1 数据库绑定】</b>，添加变量名为 <b><code>DB</code></b> 的 D1 绑定，完成后刷新页面即可。
+            请前往 Cloudflare Pages 后台 <b>【设置】->【函数】->【D1 数据库绑定】</b> 添加名为 <b><code>DB</code></b> 的绑定，保存后重新部署一次即可。
           </p>
         </div>
 
@@ -40,7 +40,7 @@
           class="mt-3.5 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-300 text-xs flex items-center space-x-2"
         >
           <span>🚀</span>
-          <span>系统首次启动：当前注册的首位用户将自动获得<b>超级管理员 (Admin)</b> 权限。</span>
+          <span>首次使用：首位注册的用户将作为系统管理员。</span>
         </div>
 
         <!-- 选项卡切换 (当系统已有管理员时可用) -->
@@ -59,7 +59,7 @@
             class="flex-1 py-1.5 rounded-lg transition-all duration-150"
             :class="activeTab === 'register' ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm font-semibold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'"
           >
-            注册普通用户
+            注册新用户
           </button>
         </div>
       </div>
@@ -120,13 +120,19 @@
           />
         </div>
 
-        <!-- 防穷举动态验证码 -->
+        <!-- 动态验证码 -->
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <label class="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              安全验证码 <span class="text-rose-500">*</span>
+              验证码 <span class="text-rose-500">*</span>
             </label>
-            <span class="text-[11px] text-zinc-400">防自动化脚本穷举</span>
+            <button
+              type="button"
+              @click="fetchCaptcha"
+              class="text-[11px] text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 transition"
+            >
+              看不清？换一张
+            </button>
           </div>
 
           <div class="flex items-center space-x-2.5">
@@ -164,7 +170,7 @@
             class="w-full py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition shadow-sm"
           >
             <span v-if="loading">处理中...</span>
-            <span v-else>{{ hasAdmin ? (activeTab === 'login' ? '立即登录' : '立即注册') : '创建管理员并初始化' }}</span>
+            <span v-else>{{ hasAdmin ? (activeTab === 'login' ? '立即登录' : '立即注册') : '创建管理员账号' }}</span>
           </button>
         </div>
       </form>

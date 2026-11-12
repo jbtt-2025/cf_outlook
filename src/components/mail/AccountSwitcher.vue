@@ -153,9 +153,9 @@ function getStatusLabel(status: AccountStatus) {
     case 'empty': return '邮箱为空';
     case 'fetching': return '正在拉取...';
     case 'refreshing': return '刷新凭证中...';
-    case 'dead': return '凭据失效 (Dead)';
-    case 'rate_limited': return '限流冷却中 (429)';
-    default: return '就绪待命';
+    case 'dead': return '凭据已失效';
+    case 'rate_limited': return '请求受限 (429)';
+    default: return '就绪';
   }
 }
 </script>
