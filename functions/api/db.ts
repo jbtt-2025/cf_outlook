@@ -48,65 +48,69 @@ export interface DbEmail {
 
 let dbInitialized = false;
 
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at INTEGER NOT NULL,
+    last_login_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
+  `CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    password TEXT,
+    refresh_token TEXT NOT NULL,
+    client_id TEXT,
+    status TEXT NOT NULL DEFAULT 'idle',
+    dead_reason TEXT,
+    rate_limit_until INTEGER,
+    last_checked_at INTEGER,
+    unread_count INTEGER DEFAULT 0,
+    latest_code TEXT,
+    latest_code_time TEXT,
+    tags TEXT DEFAULT '[]',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email)`,
+  `CREATE TABLE IF NOT EXISTS emails (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    account_email TEXT NOT NULL,
+    subject TEXT,
+    sender_name TEXT,
+    sender_address TEXT,
+    received_at TEXT,
+    body_preview TEXT,
+    body_html TEXT,
+    extracted_code TEXT,
+    is_junk INTEGER DEFAULT 0,
+    is_read INTEGER DEFAULT 0,
+    raw_headers TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_emails_user_account ON emails(user_id, account_email)`,
+  `CREATE INDEX IF NOT EXISTS idx_emails_received ON emails(received_at DESC)`
+];
+
+function cleanSql(sql: string): string {
+  return sql.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // 1. 初始化数据库表结构与索引
 export async function initDatabase(db: D1Database): Promise<void> {
   if (dbInitialized) return;
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user',
-      status TEXT NOT NULL DEFAULT 'active',
-      created_at INTEGER NOT NULL,
-      last_login_at INTEGER
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-
-    CREATE TABLE IF NOT EXISTS accounts (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      email TEXT NOT NULL,
-      password TEXT,
-      refresh_token TEXT NOT NULL,
-      client_id TEXT,
-      status TEXT NOT NULL DEFAULT 'idle',
-      dead_reason TEXT,
-      rate_limit_until INTEGER,
-      last_checked_at INTEGER,
-      unread_count INTEGER DEFAULT 0,
-      latest_code TEXT,
-      latest_code_time TEXT,
-      tags TEXT DEFAULT '[]',
-      created_at INTEGER NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
-    CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
-
-    CREATE TABLE IF NOT EXISTS emails (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      account_email TEXT NOT NULL,
-      subject TEXT,
-      sender_name TEXT,
-      sender_address TEXT,
-      received_at TEXT,
-      body_preview TEXT,
-      body_html TEXT,
-      extracted_code TEXT,
-      is_junk INTEGER DEFAULT 0,
-      is_read INTEGER DEFAULT 0,
-      raw_headers TEXT,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_emails_user_account ON emails(user_id, account_email);
-    CREATE INDEX IF NOT EXISTS idx_emails_received ON emails(received_at DESC);
-  `);
+  for (const rawSql of SCHEMA_STATEMENTS) {
+    // 将 SQL 压缩为单行格式，避免 Cloudflare D1 边缘端将多行换行截断导致 SQLITE_ERROR: incomplete input
+    await db.prepare(cleanSql(rawSql)).run();
+  }
 
   dbInitialized = true;
 }
@@ -130,10 +134,10 @@ export async function findUserById(db: D1Database, id: string): Promise<DbUser |
 
 export async function createUser(db: D1Database, user: DbUser): Promise<void> {
   await initDatabase(db);
-  await db.prepare(`
+  await db.prepare(cleanSql(`
     INSERT INTO users (id, username, password_hash, role, status, created_at, last_login_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `)).bind(
     user.id,
     user.username,
     user.password_hash,
@@ -146,14 +150,14 @@ export async function createUser(db: D1Database, user: DbUser): Promise<void> {
 
 export async function listAllUsers(db: D1Database): Promise<Array<Omit<DbUser, 'password_hash'> & { account_count: number }>> {
   await initDatabase(db);
-  const res = await db.prepare(`
+  const res = await db.prepare(cleanSql(`
     SELECT u.id, u.username, u.role, u.status, u.created_at, u.last_login_at,
            COUNT(a.id) as account_count
     FROM users u
     LEFT JOIN accounts a ON u.id = a.user_id
     GROUP BY u.id
     ORDER BY u.created_at ASC
-  `).all<any>();
+  `)).all<any>();
   return res.results || [];
 }
 
@@ -212,7 +216,7 @@ export async function getAccountById(db: D1Database, userId: string, accountId: 
 
 export async function saveAccount(db: D1Database, account: DbAccount): Promise<void> {
   await initDatabase(db);
-  await db.prepare(`
+  await db.prepare(cleanSql(`
     INSERT INTO accounts (
       id, user_id, email, password, refresh_token, client_id,
       status, dead_reason, rate_limit_until, last_checked_at,
@@ -230,7 +234,7 @@ export async function saveAccount(db: D1Database, account: DbAccount): Promise<v
       latest_code = COALESCE(excluded.latest_code, accounts.latest_code),
       latest_code_time = COALESCE(excluded.latest_code_time, accounts.latest_code_time),
       tags = excluded.tags
-  `).bind(
+  `)).bind(
     account.id,
     account.user_id,
     account.email,
@@ -373,7 +377,7 @@ export async function saveEmails(db: D1Database, emails: DbEmail[]): Promise<voi
   await initDatabase(db);
 
   for (const mail of emails) {
-    await db.prepare(`
+    await db.prepare(cleanSql(`
       INSERT INTO emails (
         id, user_id, account_email, subject, sender_name, sender_address,
         received_at, body_preview, body_html, extracted_code, is_junk, is_read, raw_headers
@@ -383,7 +387,7 @@ export async function saveEmails(db: D1Database, emails: DbEmail[]): Promise<voi
         body_preview = excluded.body_preview,
         body_html = excluded.body_html,
         extracted_code = COALESCE(excluded.extracted_code, emails.extracted_code)
-    `).bind(
+    `)).bind(
       mail.id,
       mail.user_id,
       mail.account_email,
