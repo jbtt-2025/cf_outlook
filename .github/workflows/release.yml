@@ -40,17 +40,9 @@ jobs:
       - name: 运行单元测试
         run: npm test
 
-      - name: 构建全栈静态产物 (Build Vite)
-        run: npm run build
-
-      - name: 编译 Cloudflare Pages Functions 边缘网关
-        run: npx wrangler pages functions build functions --outfile=dist/_worker.js
-
-      - name: 打包生成全栈直接部署压缩包 (dist.zip)
+      - name: 构建全栈生产产物并打包 (dist.zip)
         run: |
-          cd dist
-          zip -r ../dist.zip .
-          cd ..
+          npm run build:zip
           sha256sum dist.zip > dist.zip.sha256
           echo "ZIP SHA256: $(cat dist.zip.sha256)"
 
@@ -85,12 +77,13 @@ jobs:
           body: |
             ### 📦 Cloudflare Pages 全栈极速部署包
 
-            本 Release 包含一键全栈部署包 **`dist.zip`**（已内置前端三栏工作台与 `_worker.js` 边缘 Functions 代理）。
+            本 Release 包含一键全栈部署包 **`dist.zip`**（已内置前端三栏工作台与 `_worker.js` 边缘 Functions 网关）。
+            支持多用户权限隔离、防穷举动态验证码、服务端 D1 数据库持久化与 Refresh Token 自动滚动回写。
 
-            #### 🚀 零门槛部署教程 (10 秒上线)：
-            1. 下载下方的 **`dist.zip`**；
-            2. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/) -> **Workers 和 Pages** -> **创建应用程序** -> **Pages** -> **直接上传 (Direct Upload)**；
-            3. 输入项目名称（如 `cf-outlook`），将 `dist.zip` 拖拽上传并点击 **部署站点 (Deploy site)**；
-            4. 部署完成即可直接打开分配的 `*.pages.dev` 域名，全功能开箱即用！
+            #### 🚀 零门槛部署教程 (1 分钟极速上线)：
+            1. **准备 D1 数据库**：登录 [Cloudflare 控制台](https://dash.cloudflare.com/) -> 左侧 **D1 SQL 数据库** -> 点击创建（名称例如 `cf-outlook-db`）；
+            2. **上传部署站点**：左侧点击 **Workers 和 Pages** -> **创建应用程序** -> **Pages** -> **直接上传 (Direct Upload)**，输入项目名称（如 `cf-outlook`），上传下载的 **`dist.zip`** 并点击 **部署站点**；
+            3. **绑定数据库**：部署完成后进入该 Pages 项目 -> **设置 (Settings)** -> **函数 (Functions)** -> **D1 数据库绑定** -> 添加绑定名 **`DB`**（严格大写）指向 `cf-outlook-db`，保存后重试部署一次即可；
+            4. **创建超级管理员**：打开分配的 `*.pages.dev` 专属域名，系统自动弹出初始化向导，首个注册用户即为超级管理员！
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

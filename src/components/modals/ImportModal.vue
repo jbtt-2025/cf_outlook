@@ -7,7 +7,7 @@
           <h3 class="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <span>📥</span> 批量导入 Outlook 凭证
           </h3>
-          <p class="text-xs text-zinc-500 mt-0.5">支持粘贴多格式文本、拖拽文件导入，数据 100% 仅保存在用户本地浏览器</p>
+          <p class="text-xs text-zinc-500 mt-0.5">支持粘贴多格式文本导入，凭证安全持久化在您的 Cloudflare D1 数据库中</p>
         </div>
         <button
           @click="$emit('close')"
