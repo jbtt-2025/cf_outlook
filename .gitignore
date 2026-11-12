@@ -43,11 +43,17 @@ coverage/
 .pages/
 
 # ===============================
-# 6. 系统日志与运行时临时文件 (Logs)
+# 7. Golang 构建与数据库缓存
 # ===============================
-logs/
-*.log
-npm-debug.log*
+cf_outlook
+cf_outlook.exe
+*.exe
+release_dist/
+*.db
+*.db-wal
+*.db-shm
+data/
+
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*

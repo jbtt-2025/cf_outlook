@@ -1,0 +1,49 @@
+services:
+  cf-outlook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cf-outlook
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      # 模式 1: 默认极简 SQLite 模式 (开箱即用，数据持久化在 ./data/outlook.db)
+      - DB_DRIVER=sqlite
+      - DB_DSN=/data/outlook.db
+      - JWT_SECRET=YOUR_RANDOM_JWT_SECRET_KEY
+
+      # 模式 2: MySQL 5.7 / 8 模式 (取消注释并填写对应连接)
+      # - DB_DRIVER=mysql
+      # - DB_DSN=root:yourpassword@tcp(mysql:3306)/outlook?charset=utf8mb4&parseTime=True&loc=Local
+
+      # 模式 3: PostgreSQL 模式 (取消注释并填写对应连接)
+      # - DB_DRIVER=postgres
+      # - DB_DSN=host=postgres user=postgres password=yourpassword dbname=outlook port=5432 sslmode=disable
+
+  # (可选) 自建 MySQL 8 示例
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: cf-outlook-mysql
+  #   restart: always
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: yourpassword
+  #     MYSQL_DATABASE: outlook
+  #   volumes:
+  #     - ./mysql_data:/var/lib/mysql
+  #   command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # (可选) 自建 MySQL 5.7 示例
+  # mysql57:
+  #   image: mysql:5.7
+  #   container_name: cf-outlook-mysql57
+  #   restart: always
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: yourpassword
+  #     MYSQL_DATABASE: outlook
+  #   volumes:
+  #     - ./mysql57_data:/var/lib/mysql
