@@ -1,0 +1,81 @@
+# ===============================
+# 1. 环境变量与敏感凭据 (Secrets)
+# ===============================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===============================
+# 2. 依赖管理 (Dependencies)
+# ===============================
+node_modules/
+.pnp
+.pnp.js
+
+# ===============================
+# 3. 构建输出与缓存 (Build & Caches)
+# ===============================
+dist/
+dist-ssr/
+dist.zip
+*.zip
+.vite/
+*.local
+*.tsbuildinfo
+
+# ===============================
+# 4. 测试与报告文件 (Test & Playwright)
+# ===============================
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+coverage/
+
+# ===============================
+# 5. Cloudflare 边缘环境缓存 (Pages & Workers)
+# ===============================
+.wrangler/
+.wrangler_config/
+.wrangler_config*
+.pages/
+
+# ===============================
+# 6. 系统日志与运行时临时文件 (Logs)
+# ===============================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ===============================
+# 7. 操作系统生成文件 (OS Files)
+# ===============================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ===============================
+# 8. 编辑器与 IDE 配置 (IDE & Editors)
+# ===============================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.bak

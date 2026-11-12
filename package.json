@@ -1,0 +1,36 @@
+{
+  "name": "outlook-graph-pages",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:pages": "wrangler pages dev dist --proxy 5173 -- live-reload",
+    "build": "vite build",
+    "build:zip": "node scripts/build-zip.mjs",
+    "deploy": "wrangler pages deploy dist --project-name=cf-outlook --branch=main",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types tests/codeParser.test.ts && node --experimental-strip-types tests/deadMarkers.test.ts",
+    "test:e2e": "node tests/runE2E.mjs"
+  },
+  "dependencies": {
+    "dexie": "^4.0.8",
+    "dompurify": "^3.2.0",
+    "lucide-vue-next": "^0.453.0",
+    "radix-vue": "^1.9.7",
+    "vue": "^3.5.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "@playwright/test": "^1.65.0",
+    "@types/dompurify": "^3.0.5",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "wrangler": "^3.83.0"
+  }
+}
