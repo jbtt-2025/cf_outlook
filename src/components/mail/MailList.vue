@@ -57,8 +57,9 @@
 
     <!-- 邮件卡片列表 -->
     <div class="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/60">
+      <!-- 邮件卡片列表 (虚拟增量加载，保障海量邮件丝滑滑动) -->
       <div
-        v-for="mail in filteredMails"
+        v-for="mail in displayedMails"
         :key="mail.id"
         @click="$emit('select', mail)"
         class="p-3 cursor-pointer transition select-none hover:bg-zinc-50 dark:hover:bg-zinc-900/80 group relative"
@@ -120,6 +121,19 @@
         </div>
       </div>
 
+      <!-- 加载更多条目 (避免海量邮件一次性生成 DOM 导致卡顿) -->
+      <div
+        v-if="filteredMails.length > displayedMails.length"
+        class="p-3 text-center bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-100 dark:border-zinc-800"
+      >
+        <button
+          @click="displayLimit += 50"
+          class="w-full py-1.5 px-3 text-xs rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition font-medium"
+        >
+          加载更多 (剩余 {{ filteredMails.length - displayedMails.length }} 封)
+        </button>
+      </div>
+
       <!-- 空白占位 -->
       <div v-if="filteredMails.length === 0" class="p-8 text-center text-xs text-zinc-400 space-y-2">
         <svg class="w-8 h-8 mx-auto opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { StoredEmail } from '../../db';
 
 const props = defineProps<{
@@ -149,6 +163,9 @@ defineEmits<{
 const searchQuery = ref('');
 const subFilter = ref<'all' | 'unread' | 'code'>('all');
 const copiedId = ref<string | null>(null);
+
+// 虚拟增量加载限制 (初始 50 封，按需递增)
+const displayLimit = ref(50);
 
 const totalCount = computed(() => props.emails.length);
 const unreadCount = computed(() => props.emails.filter(e => !e.is_read).length);
@@ -178,6 +195,12 @@ const filteredMails = computed(() => {
   }
 
   return list;
+});
+
+const displayedMails = computed(() => filteredMails.value.slice(0, displayLimit.value));
+
+watch([searchQuery, subFilter], () => {
+  displayLimit.value = 50;
 });
 
 function quickCopy(code: string, id: string) {

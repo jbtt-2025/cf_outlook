@@ -37,6 +37,8 @@ import {
   listAccountsByUser,
   getAccountById,
   saveAccount,
+  saveAccountsBatch,
+  updateAccountTags,
   updateAccountSyncResult,
   deleteAccount,
   purgeDeadAccounts,
@@ -347,26 +349,33 @@ export const onRequest: PagesFunction = async (context) => {
       const currentUser = await getUserFromRequest(request);
       if (!currentUser) return errRes("请先登录", 401);
 
-      // 8.1 获取当前用户所有邮箱
+      // 8.1 获取当前用户所有邮箱 (支持 limit/offset 分页查询，默认返回全部)
       if (path === "/api/accounts" && request.method === "GET") {
-        const list = await listAccountsByUser(db, currentUser.sub);
+        const limitParam = url.searchParams.get("limit");
+        const offsetParam = url.searchParams.get("offset");
+        const options = limitParam ? {
+          limit: Math.max(1, parseInt(limitParam, 10) || 100),
+          offset: Math.max(0, parseInt(offsetParam || "0", 10) || 0)
+        } : undefined;
+
+        const list = await listAccountsByUser(db, currentUser.sub, options);
         return jsonRes({ success: true, accounts: list });
       }
 
-      // 8.2 批量导入凭据
+      // 8.2 批量分批导入凭据 (支持 D1 Batch 优化)
       if (path === "/api/accounts/import" && request.method === "POST") {
         const body: any = await request.json().catch(() => ({}));
         const accountsToImport: Array<{ email: string; password?: string; refresh_token: string; client_id?: string; tags?: string[] }> = body.accounts || [];
 
-        let successCount = 0;
         const now = Date.now();
+        const records: DbAccount[] = [];
 
         for (const item of accountsToImport) {
           if (!item.email || !item.refresh_token) continue;
           const cleanEmail = item.email.trim().toLowerCase();
           const accountId = `${currentUser.sub}_${cleanEmail}`;
 
-          const accountRecord: DbAccount = {
+          records.push({
             id: accountId,
             user_id: currentUser.sub,
             email: cleanEmail,
@@ -376,13 +385,22 @@ export const onRequest: PagesFunction = async (context) => {
             status: 'idle',
             tags: JSON.stringify(item.tags || []),
             created_at: now,
-          };
-
-          await saveAccount(db, accountRecord);
-          successCount++;
+          });
         }
 
-        return jsonRes({ success: true, count: successCount });
+        const savedCount = await saveAccountsBatch(db, records);
+        return jsonRes({ success: true, count: savedCount });
+      }
+
+      // 8.2.1 修改指定账号的注释标签
+      const matchTags = path.match(/^\/api\/accounts\/([^\/]+)\/tags$/);
+      if (matchTags && (request.method === "PUT" || request.method === "PATCH")) {
+        const accountId = matchTags[1];
+        const body: any = await request.json().catch(() => ({}));
+        const rawTags = Array.isArray(body.tags) ? body.tags : [];
+        const cleanTags = Array.from(new Set(rawTags.map((t: any) => String(t).trim()).filter(Boolean)));
+        await updateAccountTags(db, currentUser.sub, accountId, cleanTags);
+        return jsonRes({ success: true, tags: cleanTags });
       }
 
       // 8.3 同步单个账号 (刷新凭证 + 拉取邮件 + 自动更新滚动 RT)
@@ -469,6 +487,11 @@ export const onRequest: PagesFunction = async (context) => {
         const hasCodeParam = url.searchParams.get("has_code");
         const unreadOnlyParam = url.searchParams.get("unread_only");
         const search = url.searchParams.get("search") || undefined;
+        const limitParam = parseInt(url.searchParams.get("limit") || "200", 10);
+        const offsetParam = parseInt(url.searchParams.get("offset") || "0", 10);
+
+        const limit = Math.min(Math.max(1, isNaN(limitParam) ? 200 : limitParam), 1000);
+        const offset = Math.max(0, isNaN(offsetParam) ? 0 : offsetParam);
 
         const emails = await listEmailsByUser(db, currentUser.sub, {
           accountEmail,
@@ -476,7 +499,8 @@ export const onRequest: PagesFunction = async (context) => {
           hasCode: hasCodeParam === 'true',
           unreadOnly: unreadOnlyParam === 'true',
           search,
-          limit: 200,
+          limit,
+          offset,
         });
 
         return jsonRes({ success: true, emails });

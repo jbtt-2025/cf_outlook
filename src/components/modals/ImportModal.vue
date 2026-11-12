@@ -108,22 +108,38 @@ email----password----client_id----refresh_token
             </table>
           </div>
         </div>
+
+        <!-- 分批导入进度条展示 -->
+        <div v-if="isImporting" class="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg space-y-2">
+          <div class="flex items-center justify-between text-xs font-medium text-blue-700 dark:text-blue-300">
+            <span>{{ importStatusText }}</span>
+            <span class="font-mono font-bold">{{ importProgress }}%</span>
+          </div>
+          <div class="w-full h-2 bg-blue-200/60 dark:bg-blue-900/60 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-blue-600 rounded-full transition-all duration-200 ease-out"
+              :style="{ width: `${importProgress}%` }"
+            ></div>
+          </div>
+        </div>
       </div>
 
       <!-- 模态框底部按钮 -->
       <div class="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 flex items-center justify-end space-x-3">
         <button
           @click="$emit('close')"
-          class="px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xs font-medium transition"
+          :disabled="isImporting"
+          class="px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xs font-medium transition disabled:opacity-50"
         >
           取消
         </button>
         <button
           @click="submitImport"
-          :disabled="parsedAccounts.length === 0"
-          class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
+          :disabled="parsedAccounts.length === 0 || isImporting"
+          class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50 flex items-center space-x-2"
         >
-          确认导入 ({{ parsedAccounts.length }} 个账号)
+          <span v-if="isImporting" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          <span>{{ isImporting ? '分批导入中...' : `确认导入 (${parsedAccounts.length} 个账号)` }}</span>
         </button>
       </div>
     </div>
@@ -145,6 +161,9 @@ const rawText = ref('');
 const dedupStrategy = ref<'overwrite' | 'skip' | 'merge_tags'>('overwrite');
 const selectedClientId = ref('9e5f94bc-e8a4-4e73-b8be-63364c29d753');
 const tagsInput = ref('');
+const isImporting = ref(false);
+const importProgress = ref(0);
+const importStatusText = ref('');
 
 interface ParsedItem {
   email: string;
@@ -263,75 +282,97 @@ const parsedAccounts = computed<ParsedItem[]>(() => {
 
 async function submitImport() {
   const items = parsedAccounts.value;
-  if (items.length === 0) return;
+  if (items.length === 0 || isImporting.value) return;
 
   const extraTags = tagsInput.value
     .split(/[,，]/)
     .map(t => t.trim())
     .filter(Boolean);
 
+  isImporting.value = true;
+  importProgress.value = 0;
+  importStatusText.value = '准备导入...';
+
   let importedCount = 0;
   const now = Date.now();
+  const CHUNK_SIZE = 50; // 分批大小，避免 Worker 超时与浏览器卡顿
+  const total = items.length;
 
-  for (const item of items) {
-    const existing = await db.accounts.get(item.email);
+  try {
+    for (let i = 0; i < total; i += CHUNK_SIZE) {
+      const chunk = items.slice(i, i + CHUNK_SIZE);
 
-    if (existing) {
-      if (dedupStrategy.value === 'skip') {
-        continue;
+      // 1. 本地 IndexedDB 批量更新/插入
+      for (const item of chunk) {
+        const existing = await db.accounts.get(item.email);
+
+        if (existing) {
+          if (dedupStrategy.value === 'skip') {
+            continue;
+          }
+
+          const mergedTags = Array.from(new Set([...(existing.tags || []), ...extraTags]));
+          const updateData: Partial<OutlookAccount> = {
+            refresh_token: item.refresh_token,
+            client_id: item.client_id || existing.client_id,
+            status: 'idle',
+            dead_reason: undefined,
+            tags: dedupStrategy.value === 'merge_tags' ? mergedTags : (extraTags.length ? extraTags : existing.tags),
+          };
+
+          if (item.password) {
+            updateData.password = item.password;
+          }
+
+          await db.accounts.update(existing.id, updateData);
+          importedCount++;
+        } else {
+          const newAccount: OutlookAccount = {
+            id: item.email,
+            email: item.email,
+            password: item.password,
+            refresh_token: item.refresh_token,
+            client_id: item.client_id || selectedClientId.value,
+            status: 'idle',
+            tags: extraTags,
+            created_at: now,
+          };
+
+          await db.accounts.add(newAccount);
+          importedCount++;
+        }
       }
 
-      const mergedTags = Array.from(new Set([...(existing.tags || []), ...extraTags]));
-      const updateData: Partial<OutlookAccount> = {
-        refresh_token: item.refresh_token,
-        client_id: item.client_id || existing.client_id,
-        status: 'idle',
-        dead_reason: undefined,
-        tags: dedupStrategy.value === 'merge_tags' ? mergedTags : (extraTags.length ? extraTags : existing.tags),
-      };
-
-      if (item.password) {
-        updateData.password = item.password;
+      // 2. 远端 D1 数据库分批提交 (每批 50 条)
+      if (getStoredToken()) {
+        try {
+          await api.post('/api/accounts/import', {
+            accounts: chunk.map(item => ({
+              email: item.email,
+              password: item.password,
+              refresh_token: item.refresh_token,
+              client_id: item.client_id || selectedClientId.value,
+              tags: extraTags,
+            })),
+          });
+        } catch (err) {
+          console.error('Remote chunk import failed:', err);
+        }
       }
 
-      await db.accounts.update(existing.id, updateData);
-      importedCount++;
-    } else {
-      const newAccount: OutlookAccount = {
-        id: item.email,
-        email: item.email,
-        password: item.password,
-        refresh_token: item.refresh_token,
-        client_id: item.client_id || selectedClientId.value,
-        status: 'idle',
-        tags: extraTags,
-        created_at: now,
-      };
-
-      await db.accounts.add(newAccount);
-      importedCount++;
+      const processed = Math.min(total, i + chunk.length);
+      importProgress.value = Math.round((processed / total) * 100);
+      importStatusText.value = `正在分批导入: ${processed} / ${total}`;
     }
-  }
 
-  if (getStoredToken()) {
-    try {
-      await api.post('/api/accounts/import', {
-        accounts: items.map(item => ({
-          email: item.email,
-          password: item.password,
-          refresh_token: item.refresh_token,
-          client_id: item.client_id || selectedClientId.value,
-          tags: extraTags,
-        })),
-      });
-    } catch (err) {
-      console.error('Remote import failed:', err);
-    }
+    rawText.value = '';
+    tagsInput.value = '';
+    emit('imported', importedCount);
+    emit('close');
+  } catch (err: any) {
+    alert(`导入过程中发生错误: ${err?.message || err}`);
+  } finally {
+    isImporting.value = false;
   }
-
-  rawText.value = '';
-  tagsInput.value = '';
-  emit('imported', importedCount);
-  emit('close');
 }
 </script>

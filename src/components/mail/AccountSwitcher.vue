@@ -68,9 +68,9 @@
             <span class="text-[11px] text-zinc-400 font-mono">{{ totalUnread }} 未读</span>
           </button>
 
-          <!-- 账号列表 -->
+          <!-- 账号列表 (限制前 50 项，保障 10,000 级数据秒开无卡顿) -->
           <button
-            v-for="acc in filteredAccounts"
+            v-for="acc in displayedAccounts"
             :key="acc.id"
             @click="select(acc)"
             class="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
@@ -91,6 +91,10 @@
               {{ acc.unread_count }}
             </span>
           </button>
+
+          <div v-if="filteredAccounts.length > 50" class="p-2 text-center text-[11px] text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
+            显示前 50 个匹配项 (共 {{ filteredAccounts.length }} 个)，输入关键词精准查找
+          </div>
 
           <div v-if="filteredAccounts.length === 0 && accounts.length > 0" class="p-3 text-center text-xs text-zinc-400">
             无匹配账号
@@ -129,6 +133,9 @@ const filteredAccounts = computed(() => {
     a.tags?.some(t => t.toLowerCase().includes(q))
   );
 });
+
+// 优化 10000 级海量邮箱下拉性能：最多展示前 50 条匹配项，毫秒级响应
+const displayedAccounts = computed(() => filteredAccounts.value.slice(0, 50));
 
 function select(account: OutlookAccount | null) {
   emit('select', account);

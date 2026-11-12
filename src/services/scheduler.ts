@@ -14,6 +14,7 @@ class Scheduler {
   private isRunning: boolean = false;
   private activeJobs: number = 0;
   private queue: string[] = []; // 待拉取账号 ID 队列
+  private queuedSet: Set<string> = new Set(); // O(1) 队列去重哈希集
   private timer: any = null;
   private listeners: Set<() => void> = new Set();
 
@@ -23,7 +24,7 @@ class Scheduler {
   }
 
   public setConcurrency(limit: number) {
-    this.concurrency = Math.max(1, Math.min(15, limit));
+    this.concurrency = Math.max(1, Math.min(25, limit));
   }
 
   public getConcurrency() {
@@ -107,7 +108,8 @@ class Scheduler {
   }
 
   public enqueue(accountId: string, highPriority = false) {
-    if (this.queue.includes(accountId)) return;
+    if (this.queuedSet.has(accountId)) return;
+    this.queuedSet.add(accountId);
     if (highPriority) {
       this.queue.unshift(accountId);
     } else {
@@ -120,8 +122,8 @@ class Scheduler {
     const accounts = await db.accounts.toArray();
 
     for (const acc of accounts) {
-      // 忽略已确认死号
-      if (acc.status === 'dead') continue;
+      // 忽略已确认死号与已在队列中的账号
+      if (acc.status === 'dead' || this.queuedSet.has(acc.id)) continue;
 
       // 429 限流冷却中
       if (acc.status === 'rate_limited') {
@@ -159,6 +161,7 @@ class Scheduler {
     while (this.activeJobs < this.concurrency && this.queue.length > 0) {
       const nextId = this.queue.shift();
       if (!nextId) break;
+      this.queuedSet.delete(nextId);
 
       const account = await db.accounts.get(nextId);
       if (!account || account.status === 'dead') continue;
@@ -207,22 +210,21 @@ class Scheduler {
             // 重新拉取邮件列表更新本地
             const emailRes = await api.get(`/api/emails?account_email=${encodeURIComponent(account.email)}`);
             if (emailRes.success && emailRes.emails) {
-              for (const m of emailRes.emails) {
-                await db.emails.put({
-                  id: m.id,
-                  account_email: m.account_email,
-                  subject: m.subject,
-                  sender_name: m.sender_name,
-                  sender_address: m.sender_address,
-                  received_at: m.received_at,
-                  body_preview: m.body_preview,
-                  body_html: m.body_html,
-                  extracted_code: m.extracted_code,
-                  is_junk: Boolean(m.is_junk),
-                  is_read: Boolean(m.is_read),
-                  raw_headers: m.raw_headers ? JSON.parse(m.raw_headers) : undefined,
-                });
-              }
+              const mapped = emailRes.emails.map((m: any) => ({
+                id: m.id,
+                account_email: m.account_email,
+                subject: m.subject,
+                sender_name: m.sender_name,
+                sender_address: m.sender_address,
+                received_at: m.received_at,
+                body_preview: m.body_preview,
+                body_html: m.body_html,
+                extracted_code: m.extracted_code,
+                is_junk: Boolean(m.is_junk),
+                is_read: Boolean(m.is_read),
+                raw_headers: m.raw_headers ? JSON.parse(m.raw_headers) : undefined,
+              }));
+              await db.emails.bulkPut(mapped);
             }
             return;
           }

@@ -133,6 +133,7 @@
             :accounts="accounts"
             @check-one="handleCheckOne"
             @delete="handleDeleteAccount"
+            @tags-updated="handleTagsUpdated"
           />
         </div>
       </template>
@@ -302,51 +303,48 @@ async function syncWithRemote() {
   if (!token) return;
 
   try {
-    // 1. 同步账号
+    // 1. 同步账号 (使用 bulkPut 高性能批量入库)
     const accRes = await api.get('/api/accounts');
     if (accRes.success && accRes.accounts) {
-      // 保持本地数据库与服务端同步
+      const mappedAccounts = accRes.accounts.map((item: any) => ({
+        id: item.id,
+        email: item.email,
+        password: item.password,
+        refresh_token: item.refresh_token,
+        client_id: item.client_id,
+        status: item.status as any,
+        dead_reason: item.dead_reason,
+        rate_limit_until: item.rate_limit_until,
+        last_checked_at: item.last_checked_at,
+        unread_count: item.unread_count,
+        latest_code: item.latest_code,
+        latest_code_time: item.latest_code_time,
+        tags: item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) : [],
+        created_at: item.created_at,
+      }));
       await db.accounts.clear();
-      for (const item of accRes.accounts) {
-        await db.accounts.put({
-          id: item.id,
-          email: item.email,
-          password: item.password,
-          refresh_token: item.refresh_token,
-          client_id: item.client_id,
-          status: item.status as any,
-          dead_reason: item.dead_reason,
-          rate_limit_until: item.rate_limit_until,
-          last_checked_at: item.last_checked_at,
-          unread_count: item.unread_count,
-          latest_code: item.latest_code,
-          latest_code_time: item.latest_code_time,
-          tags: item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) : [],
-          created_at: item.created_at,
-        });
-      }
+      await db.accounts.bulkPut(mappedAccounts);
     }
 
-    // 2. 同步邮件
+    // 2. 同步邮件 (使用 bulkPut 高性能批量入库)
     const emailRes = await api.get('/api/emails');
     if (emailRes.success && emailRes.emails) {
+      const mappedEmails = emailRes.emails.map((m: any) => ({
+        id: m.id,
+        account_email: m.account_email,
+        subject: m.subject,
+        sender_name: m.sender_name,
+        sender_address: m.sender_address,
+        received_at: m.received_at,
+        body_preview: m.body_preview,
+        body_html: m.body_html,
+        extracted_code: m.extracted_code,
+        is_junk: Boolean(m.is_junk),
+        is_read: Boolean(m.is_read),
+        raw_headers: m.raw_headers ? JSON.parse(m.raw_headers) : undefined,
+      }));
       await db.emails.clear();
-      for (const m of emailRes.emails) {
-        await db.emails.put({
-          id: m.id,
-          account_email: m.account_email,
-          subject: m.subject,
-          sender_name: m.sender_name,
-          sender_address: m.sender_address,
-          received_at: m.received_at,
-          body_preview: m.body_preview,
-          body_html: m.body_html,
-          extracted_code: m.extracted_code,
-          is_junk: Boolean(m.is_junk),
-          is_read: Boolean(m.is_read),
-          raw_headers: m.raw_headers ? JSON.parse(m.raw_headers) : undefined,
-        });
-      }
+      await db.emails.bulkPut(mappedEmails);
     }
 
     await loadData();
@@ -368,6 +366,11 @@ async function handleLoginSuccess(user: any) {
   showAuthModal.value = false;
   showToast(`欢迎回来，${user.username}！`);
   await syncWithRemote();
+}
+
+function handleTagsUpdated(_data: { accountId: string; tags: string[] }) {
+  showToast('标签注释已更新！');
+  loadData();
 }
 
 // 退出登录

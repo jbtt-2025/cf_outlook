@@ -79,6 +79,7 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email)`,
+  `CREATE INDEX IF NOT EXISTS idx_accounts_user_created ON accounts(user_id, created_at DESC)`,
   `CREATE TABLE IF NOT EXISTS emails (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -96,7 +97,9 @@ const SCHEMA_STATEMENTS = [
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
   `CREATE INDEX IF NOT EXISTS idx_emails_user_account ON emails(user_id, account_email)`,
-  `CREATE INDEX IF NOT EXISTS idx_emails_received ON emails(received_at DESC)`
+  `CREATE INDEX IF NOT EXISTS idx_emails_received ON emails(received_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_emails_user_received ON emails(user_id, received_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_emails_user_account_received ON emails(user_id, account_email, received_at DESC)`
 ];
 
 function cleanSql(sql: string): string {
@@ -199,8 +202,21 @@ export async function deleteUserAndData(db: D1Database, id: string): Promise<voi
 }
 
 // 3. 账号凭据操作 (用户隔离)
-export async function listAccountsByUser(db: D1Database, userId: string): Promise<DbAccount[]> {
+export async function listAccountsByUser(
+  db: D1Database,
+  userId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<DbAccount[]> {
   await initDatabase(db);
+  if (options?.limit !== undefined) {
+    const limit = Math.max(1, options.limit);
+    const offset = Math.max(0, options.offset || 0);
+    const res = await db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .bind(userId, limit, offset)
+      .all<DbAccount>();
+    return res.results || [];
+  }
+
   const res = await db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at DESC')
     .bind(userId)
     .all<DbAccount>();
@@ -251,6 +267,79 @@ export async function saveAccount(db: D1Database, account: DbAccount): Promise<v
     account.tags || '[]',
     account.created_at
   ).run();
+}
+
+/**
+ * 批量分批导入账号 (D1 batch 优化，单批 50 条，避免 Worker 超时与 CPU 溢出)
+ */
+export async function saveAccountsBatch(db: D1Database, accounts: DbAccount[]): Promise<number> {
+  if (accounts.length === 0) return 0;
+  await initDatabase(db);
+
+  const INSERT_SQL = cleanSql(`
+    INSERT INTO accounts (
+      id, user_id, email, password, refresh_token, client_id,
+      status, dead_reason, rate_limit_until, last_checked_at,
+      unread_count, latest_code, latest_code_time, tags, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      refresh_token = excluded.refresh_token,
+      password = COALESCE(excluded.password, accounts.password),
+      client_id = COALESCE(excluded.client_id, accounts.client_id),
+      status = excluded.status,
+      dead_reason = excluded.dead_reason,
+      rate_limit_until = excluded.rate_limit_until,
+      last_checked_at = excluded.last_checked_at,
+      unread_count = excluded.unread_count,
+      latest_code = COALESCE(excluded.latest_code, accounts.latest_code),
+      latest_code_time = COALESCE(excluded.latest_code_time, accounts.latest_code_time),
+      tags = excluded.tags
+  `);
+
+  const CHUNK_SIZE = 50;
+  let savedCount = 0;
+
+  for (let i = 0; i < accounts.length; i += CHUNK_SIZE) {
+    const chunk = accounts.slice(i, i + CHUNK_SIZE);
+    const statements = chunk.map(account =>
+      db.prepare(INSERT_SQL).bind(
+        account.id,
+        account.user_id,
+        account.email,
+        account.password || null,
+        account.refresh_token,
+        account.client_id || null,
+        account.status,
+        account.dead_reason || null,
+        account.rate_limit_until || null,
+        account.last_checked_at || null,
+        account.unread_count || 0,
+        account.latest_code || null,
+        account.latest_code_time || null,
+        account.tags || '[]',
+        account.created_at
+      )
+    );
+    await db.batch(statements);
+    savedCount += chunk.length;
+  }
+
+  return savedCount;
+}
+
+/**
+ * 更新账号标签注释
+ */
+export async function updateAccountTags(
+  db: D1Database,
+  userId: string,
+  accountId: string,
+  tags: string[]
+): Promise<void> {
+  await initDatabase(db);
+  await db.prepare(cleanSql('UPDATE accounts SET tags = ? WHERE id = ? AND user_id = ?'))
+    .bind(JSON.stringify(tags), accountId, userId)
+    .run();
 }
 
 export async function updateAccountSyncResult(
@@ -335,7 +424,7 @@ export async function purgeDeadAccounts(db: D1Database, userId: string): Promise
 export async function listEmailsByUser(
   db: D1Database,
   userId: string,
-  options?: { accountEmail?: string; isJunk?: boolean; hasCode?: boolean; unreadOnly?: boolean; search?: string; limit?: number }
+  options?: { accountEmail?: string; isJunk?: boolean; hasCode?: boolean; unreadOnly?: boolean; search?: string; limit?: number; offset?: number }
 ): Promise<DbEmail[]> {
   await initDatabase(db);
   let query = 'SELECT * FROM emails WHERE user_id = ?';
@@ -365,8 +454,8 @@ export async function listEmailsByUser(
     params.push(s, s, s, s, s);
   }
 
-  query += ' ORDER BY received_at DESC LIMIT ?';
-  params.push(options?.limit || 200);
+  query += ' ORDER BY received_at DESC LIMIT ? OFFSET ?';
+  params.push(options?.limit || 200, Math.max(0, options?.offset || 0));
 
   const res = await db.prepare(query).bind(...params).all<DbEmail>();
   return res.results || [];

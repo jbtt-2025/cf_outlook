@@ -110,7 +110,7 @@
         <input
           type="range"
           min="1"
-          max="15"
+          max="25"
           :value="concurrency"
           @input="$emit('update:concurrency', Number(($event.target as HTMLInputElement).value))"
           class="w-20 accent-blue-600 cursor-pointer"

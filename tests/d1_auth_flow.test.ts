@@ -12,6 +12,8 @@ import {
   listAccountsByUser,
   getAccountById,
   saveAccount,
+  saveAccountsBatch,
+  updateAccountTags,
   updateAccountSyncResult,
   deleteAccount,
   DbAccount
@@ -53,6 +55,13 @@ function createMockD1Database(): any {
         },
       };
       return stmt;
+    },
+    async batch(statements: any[]) {
+      const results = [];
+      for (const s of statements) {
+        results.push(await s.run());
+      }
+      return results;
     },
     async exec(query: string) {
       db.exec(query);
@@ -144,7 +153,60 @@ async function runD1AuthFlowTest() {
   assert.strictEqual(updatedAccount?.latest_code, '829104');
   console.log('✔ [PASS] Refresh Token atomic rolling writeback verified.');
 
-  // 6. 管理员管理功能测试
+  // 6. 标签修改测试 (updateAccountTags)
+  await updateAccountTags(d1, normalUser.id, acc1.id, ['重要', 'OpenAI', '主力']);
+  const taggedAccount = await getAccountById(d1, normalUser.id, acc1.id);
+  const parsedTags = JSON.parse(taggedAccount?.tags || '[]');
+  assert.deepStrictEqual(parsedTags, ['重要', 'OpenAI', '主力'], 'Account tags must match updated tags');
+  console.log('✔ [PASS] Account tag editing verified.');
+
+  // 7. 批量分批导入测试 (saveAccountsBatch) 与导入时间排序验证
+  const baseTime = Date.now();
+  const batchAccounts: DbAccount[] = [
+    {
+      id: `${normalUser.id}_batch1@outlook.com`,
+      user_id: normalUser.id,
+      email: 'batch1@outlook.com',
+      refresh_token: 'rt_batch_1',
+      status: 'idle',
+      created_at: baseTime + 1000,
+    },
+    {
+      id: `${normalUser.id}_batch2@outlook.com`,
+      user_id: normalUser.id,
+      email: 'batch2@outlook.com',
+      refresh_token: 'rt_batch_2',
+      status: 'idle',
+      created_at: baseTime + 2000,
+    },
+    {
+      id: `${normalUser.id}_batch3@outlook.com`,
+      user_id: normalUser.id,
+      email: 'batch3@outlook.com',
+      refresh_token: 'rt_batch_3',
+      status: 'idle',
+      created_at: baseTime + 3000,
+    },
+  ];
+  const savedBatchCount = await saveAccountsBatch(d1, batchAccounts);
+  assert.strictEqual(savedBatchCount, 3, 'Batch save should return 3');
+
+  const allUserAccounts = await listAccountsByUser(d1, normalUser.id);
+  assert.strictEqual(allUserAccounts[0].email, 'batch3@outlook.com', 'Latest imported account (created_at=3000) should be first');
+  console.log('✔ [PASS] saveAccountsBatch and import-time ordering verified.');
+
+  // 7.1 分页查询测试 (针对海量 10,000 级数据分页与 Limit/Offset 性能)
+  const page1 = await listAccountsByUser(d1, normalUser.id, { limit: 2, offset: 0 });
+  assert.strictEqual(page1.length, 2, 'Page 1 limit 2 should return 2 accounts');
+  assert.strictEqual(page1[0].email, 'batch3@outlook.com');
+  assert.strictEqual(page1[1].email, 'batch2@outlook.com');
+
+  const page2 = await listAccountsByUser(d1, normalUser.id, { limit: 2, offset: 2 });
+  assert.strictEqual(page2.length, 2, 'Page 2 should return remaining accounts');
+  assert.strictEqual(page2[0].email, 'batch1@outlook.com');
+  console.log('✔ [PASS] High-capacity limit & offset pagination verified.');
+
+  // 8. 管理员管理功能测试
   const allUsers = await listAllUsers(d1);
   assert.strictEqual(allUsers.length, 2, 'Admin should see all 2 users');
 

@@ -44,6 +44,10 @@ export class WebmailDB extends Dexie {
       accounts: 'id, email, status, last_checked_at, *tags',
       emails: 'id, account_email, received_at, extracted_code, is_read, is_junk',
     });
+    this.version(2).stores({
+      accounts: 'id, email, status, last_checked_at, created_at, *tags',
+      emails: 'id, account_email, received_at, extracted_code, is_read, is_junk',
+    });
   }
 }
 
