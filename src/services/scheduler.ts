@@ -1,6 +1,7 @@
 import { db, type OutlookAccount, type StoredEmail } from '../db';
 import type { MailListRequest, MailListResponse } from '../types/api';
 import { extractVerificationCode } from './codeParser';
+import { getStoredToken, api } from './apiClient';
 
 export interface SchedulerOptions {
   concurrency?: number;
@@ -183,7 +184,54 @@ class Scheduler {
       });
       this.notify();
 
-      // 2. 发起同源 POST /api/mail/list 请求
+      const token = getStoredToken();
+
+      // 如果已登录，优先调用服务端的同步接口，服务端自动更新数据库并回写最新 RT
+      if (token) {
+        try {
+          const syncRes = await api.post(`/api/accounts/${account.id}/sync`);
+          if (syncRes.success && syncRes.account) {
+            const acc = syncRes.account;
+            await db.accounts.update(account.id, {
+              refresh_token: acc.refresh_token,
+              client_id: acc.client_id,
+              status: acc.status,
+              dead_reason: acc.dead_reason,
+              rate_limit_until: acc.rate_limit_until,
+              last_checked_at: acc.last_checked_at,
+              unread_count: acc.unread_count,
+              latest_code: acc.latest_code,
+              latest_code_time: acc.latest_code_time,
+            });
+
+            // 重新拉取邮件列表更新本地
+            const emailRes = await api.get(`/api/emails?account_email=${encodeURIComponent(account.email)}`);
+            if (emailRes.success && emailRes.emails) {
+              for (const m of emailRes.emails) {
+                await db.emails.put({
+                  id: m.id,
+                  account_email: m.account_email,
+                  subject: m.subject,
+                  sender_name: m.sender_name,
+                  sender_address: m.sender_address,
+                  received_at: m.received_at,
+                  body_preview: m.body_preview,
+                  body_html: m.body_html,
+                  extracted_code: m.extracted_code,
+                  is_junk: Boolean(m.is_junk),
+                  is_read: Boolean(m.is_read),
+                  raw_headers: m.raw_headers ? JSON.parse(m.raw_headers) : undefined,
+                });
+              }
+            }
+            return;
+          }
+        } catch (serverErr: any) {
+          console.warn('[Sync API Server Error, fallback to direct]', serverErr);
+        }
+      }
+
+      // 未登录或服务端备用降级：发起 POST /api/mail/list 请求
       const payload: MailListRequest = {
         refresh_token: account.refresh_token,
         client_id: account.client_id,

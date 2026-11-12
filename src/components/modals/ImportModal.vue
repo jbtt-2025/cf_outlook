@@ -133,6 +133,7 @@ email----password----client_id----refresh_token
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { db, type OutlookAccount } from '../../db';
+import { getStoredToken, api } from '../../services/apiClient';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{
@@ -309,6 +310,22 @@ async function submitImport() {
 
       await db.accounts.add(newAccount);
       importedCount++;
+    }
+  }
+
+  if (getStoredToken()) {
+    try {
+      await api.post('/api/accounts/import', {
+        accounts: items.map(item => ({
+          email: item.email,
+          password: item.password,
+          refresh_token: item.refresh_token,
+          client_id: item.client_id || selectedClientId.value,
+          tags: extraTags,
+        })),
+      });
+    } catch (err) {
+      console.error('Remote import failed:', err);
     }
   }
 

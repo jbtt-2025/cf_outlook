@@ -30,6 +30,44 @@ async function run() {
       try { fs.unlinkSync(tempOut); } catch {}
     }
   }
+
+  // 3. 测试 auth & captcha
+  const tempAuthOut = path.resolve('tests/.temp_auth_test.mjs');
+  try {
+    await esbuild.build({
+      entryPoints: ['tests/auth_captcha.test.ts'],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      outfile: tempAuthOut,
+      logLevel: 'error',
+    });
+
+    await import('file://' + tempAuthOut);
+  } finally {
+    if (fs.existsSync(tempAuthOut)) {
+      try { fs.unlinkSync(tempAuthOut); } catch {}
+    }
+  }
+
+  // 4. 测试 D1 数据库、多用户权限隔离与凭证滚动写回
+  const tempD1Out = path.resolve('tests/.temp_d1_test.mjs');
+  try {
+    await esbuild.build({
+      entryPoints: ['tests/d1_auth_flow.test.ts'],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      outfile: tempD1Out,
+      logLevel: 'error',
+    });
+
+    await import('file://' + tempD1Out);
+  } finally {
+    if (fs.existsSync(tempD1Out)) {
+      try { fs.unlinkSync(tempD1Out); } catch {}
+    }
+  }
 }
 
 run().catch((err) => {

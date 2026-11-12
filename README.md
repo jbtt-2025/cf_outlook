@@ -3,10 +3,10 @@
 # ⚡ Outlook Graph 批量邮箱管理与邮件获取系统
 ### (Cloudflare Pages 全栈版 / Fullstack Monolithic)
 
-> **零集中存储 · 100% 客户端本地加密 · 同源同域免 CORS · 边缘计算无状态代理**
+> **多用户权限隔离 · 纯原生防穷举验证码 · 服务端凭据持久化 · 微软最新 RT 自动滚动回写**
 > 
-> 基于 **Cloudflare Pages 前后端不分离架构**，前端三栏邮件工作台与后端 `/functions` 边缘代理网关同源同域驱动。
-> 微软 Refresh Token 自动滚动回写，永不丢失最新有效凭据。
+> 基于 **Cloudflare Pages 前后端不分离架构**，前端三栏邮件工作台与后端 `/functions` 边缘网关同源同域驱动。
+> 支持管理员与普通用户角色权限隔离，内置服务端防穷举动态图形验证码，网页端自动轮询调度并实时写回最新有效 Refresh Token。
 
 [![Cloudflare Pages](https://img.shields.io/badge/Deployed%20with-Cloudflare%20Pages-F38020?logo=cloudflare&logoColor=white)](https://cf-outlook.pages.dev)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -38,7 +38,18 @@
 
 ## ✨ 核心功能特性
 
-### 1. ⚡ 验证码雷达专属流 (Code Radar)
+### 1. 👥 用户注册与多角色管控系统 (Admin & User)
+- **极简极速注册**：仅需输入「用户名」与「密码」即可秒级完成注册与登录；
+- **首任超级管理员自动提权**：数据库首次初始化时，首位注册用户自动提权为**超级管理员 (Admin)**；后续注册用户自动赋予**普通用户 (User)** 角色；
+- **全生命周期管控面板**：管理员专属面板支持实时查看所有注册用户、一键切换用户角色（管理员/普通用户）、一键停用/启用用户、重置用户密码以及物理级删除用户资产；
+- **严格的数据隔离**：每个用户的 Outlook 邮箱凭证与邮件数据物理隔离，普通用户仅能查看与操作自己名下的邮箱资产。
+
+### 2. 🛡️ 纯原生 WebCrypto 防穷举动态验证码 (HMAC Captcha)
+- **防脚本爆破与撞库**：在用户登录与注册环节内置防穷举矢量 SVG 动态验证码，字符带随机旋转、扰动贝塞尔曲线与噪点；
+- **边缘无状态防篡改**：采用纯 WebCrypto 原生实现的 HMAC-SHA256 签名校验机制，零外部依赖，极速核验且防篡改；
+- **交互友好**：轻触验证码图片即可一键动态刷新。
+
+### 3. ⚡ 验证码雷达专属流 (Code Radar)
 - **智能提取算法**：内置高精度多模式正则与 HTML 样式解析器，自动从邮件标题、正文及大号字体样式中提取 4~8 位数字或大写字母组合验证码（支持 Google、OpenAI、GitHub、Discord 等常见平台通知格式）；
 - **防误判过滤**：内置停用词表，自动规避年份（如 2024~2035）及普通英语单词误判；
 - **一键快捷复制**：雷达流中以高亮大卡片形式展示最新验证码，卡片与邮件列表中均内嵌一键复制按钮与动态复制反馈。
@@ -85,9 +96,17 @@
 
 ---
 
-## ☁️ Cloudflare Pages 线上部署方式
+## ☁️ Cloudflare Pages 线上部署指南 (含 D1 数据库配置)
 
-本项目支持三种线上部署方式，请根据您的偏好选择（按推荐与难易程度排序）：
+由于本项目支持**多用户权限隔离**与**服务端凭证自动持久化**，部署时需在 Cloudflare 免费创建一个 D1 数据库并绑定至 Pages（完全免费，Cloudflare 提供每天 500 万次读取与 10 万次写入额度）。
+
+### 📌 关键准备：创建 Cloudflare D1 数据库 (仅需 30 秒)
+
+1. 登录 [Cloudflare 控制台 (Dashboard)](https://dash.cloudflare.com/)；
+2. 在左侧菜单点击 **存储和数据库 (Storage & Databases)** -> 选择 **D1 SQL 数据库**；
+3. 点击 **创建 (Create)** -> 输入数据库名称（例如：`cf-outlook-db`）-> 点击 **创建** 即可。
+
+---
 
 ### 方式一：直接上传 ZIP 压缩包部署（零门槛，最快捷，免命令行）
 
@@ -100,15 +119,24 @@
      npm run build:zip
      ```
      *(该脚本会自动打包静态资源并将 `functions/` 边缘 API 编译至 `dist/_worker.js`，最终生成 `dist.zip`)*。
-2. **在 Cloudflare 部署**：
-   - 登录 [Cloudflare 控制台 (Dashboard)](https://dash.cloudflare.com/)；
-   - 左侧菜单点击 **Workers 和 Pages (Workers & Pages)** -> 点击 **创建应用程序 (Create application)**；
+2. **在 Cloudflare 部署 Pages**：
+   - 登录 Cloudflare 控制台 -> 左侧菜单点击 **Workers 和 Pages (Workers & Pages)** -> 点击 **创建应用程序 (Create application)**；
    - 切换到 **Pages** 标签页 -> 选择 **直接上传 (Direct Upload)**；
    - 输入您自定义的项目名称（例如：`cf-outlook`）；
    - 将 `dist.zip` 压缩包直接拖拽上传到网页虚线框中；
    - 点击 **部署站点 (Deploy site)**。
-3. **完成部署**：
-   - 等待约 10 秒，Cloudflare 提示部署成功，并生成形如 `https://cf-outlook.pages.dev` 的专属公网域名，打开即可全功能使用！
+3. **绑定 D1 数据库**：
+   - 部署完成后，点击 **继续处理项目 (Continue to project)**（或进入该 Pages 项目主页）；
+   - 切换到 **设置 (Settings)** 标签页 -> 点击左侧 **函数 (Functions)**；
+   - 向下滚动找到 **D1 数据库绑定 (D1 database bindings)** -> 点击 **添加绑定 (Add binding)**：
+     - **变量名称 (Variable name)**：必须填写 **`DB`**（严格大写）；
+     - **D1 数据库 (D1 database)**：选择前面创建的 `cf-outlook-db`；
+   - 点击 **保存 (Save)**。
+4. **触发一次重新部署使绑定生效**：
+   - 返回项目 **部署 (Deployments)** 页面，点击最近一次部署右侧的 `...` 菜单 -> 选择 **重试部署 (Retry deployment)**（或重新上传一次 `dist.zip`）；
+5. **初始化并使用**：
+   - 打开分配的 `https://<你的项目名>.pages.dev`；
+   - 系统将自动弹出「系统初始化向导」，输入用户名、密码及验证码注册，**首位注册用户即为系统超级管理员**！
 
 ---
 
@@ -116,24 +144,24 @@
 
 > 适合拥有 Node.js 环境、希望在本地命令行直接部署与调试的开发者。
 
-1. **配置环境变量**：
-   - 将根目录下的 `.env.example` 复制为 `.env`：
-     ```env
-     CLOUDFLARE_ACCOUNT_ID=你的_Cloudflare_Account_ID
-     CLOUDFLARE_API_TOKEN=你的_Cloudflare_API_Token
+1. **配置环境变量与 D1 数据库**：
+   - 运行命令行创建云端 D1 数据库：
+     ```bash
+     npx wrangler d1 create cf-outlook-db
      ```
-     *(提示：Account ID 与 API Token 可在 Cloudflare 控制台 -> 个人资料 -> API 令牌 中创建并获取)*。
-2. **安装依赖并编译**：
+     *(终端会输出 `database_name` 与 `database_id`)*。
+   - 将根目录下的 `.env.example` 复制为 `.env` 并填写 Cloudflare 凭证。
+2. **安装依赖并编译打包**：
    ```bash
    npm install
-   npm run build
+   npm run build:zip
    ```
 3. **一键推送部署**：
    ```bash
    npx wrangler pages deploy dist --project-name=cf-outlook --branch=main
    ```
-4. **部署完成**：
-   - Wrangler 会自动编译 `functions/` 边缘无状态网关、上传前端静态资源，并在终端输出访问链接。
+4. **绑定 D1 数据库**：
+   - 在 Cloudflare 控制台进入部署好的 `cf-outlook` Pages 项目 -> **设置 (Settings)** -> **函数 (Functions)** -> **D1 数据库绑定** -> 添加绑定名 **`DB`** 指向 `cf-outlook-db`。
 
 ---
 
@@ -147,17 +175,16 @@
    - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)；
    - 导航至 **Workers 和 Pages** -> 点击 **创建应用程序** -> 选择 **Pages**；
    - 点击 **连接到 Git (Connect to Git)** 并授权绑定你的 GitHub 账号；
-   - 从列表中选择刚刚 Fork 的仓库（如 `your-username/cf_outlook`），点击 **开始设置 (Begin setup)**。
+   - 从列表中选择刚刚 Fork 的仓库，点击 **开始设置 (Begin setup)**。
 3. **填写构建配置 (Build Settings)**：
-   - **项目名称 (Project name)**：默认或自定义（如 `cf-outlook`）；
-   - **生产分支 (Production branch)**：`main`（或 `master`）；
    - **框架预设 (Framework preset)**：选择 **`Vite`**；
    - **构建命令 (Build command)**：填入 `npm run build`；
-   - **构建输出目录 (Build output directory)**：填入 `dist`；
-   - **环境变量 (Environment variables)**：无需配置任何环境变量，留空即可！
+   - **构建输出目录 (Build output directory)**：填入 `dist`。
 4. **保存并自动发布**：
-   - 点击 **保存并部署 (Save and Deploy)**，Cloudflare 会在 1 分钟内自动拉取代码、执行构建，并部署前端与边缘 Functions API。
-   - **后续自动更新**：当原仓库发布新版本时，您只需在自己的 GitHub 仓库页面点击 **`Sync fork`**，Cloudflare Pages 会全自动触发流水线重新打包部署最新版本，无需手动维护服务器！
+   - 点击 **保存并部署 (Save and Deploy)**。
+5. **绑定 D1 数据库**：
+   - 构建完成后，前往该 Pages 项目 -> **设置 (Settings)** -> **函数 (Functions)** -> **D1 数据库绑定** -> 添加变量名 **`DB`** 绑定至 `cf-outlook-db`；
+   - 绑定后点击 **重试构建 (Retry deployment)** 即可完全上线！
 
 ---
 
