@@ -1,0 +1,96 @@
+name: Build & Release dist.zip
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (留空则根据版本号与运行次数自动生成)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 配置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行单元测试
+        run: npm test
+
+      - name: 构建全栈静态产物 (Build Vite)
+        run: npm run build
+
+      - name: 编译 Cloudflare Pages Functions 边缘网关
+        run: npx wrangler pages functions build functions --outfile=dist/_worker.js
+
+      - name: 打包生成全栈直接部署压缩包 (dist.zip)
+        run: |
+          cd dist
+          zip -r ../dist.zip .
+          cd ..
+          sha256sum dist.zip > dist.zip.sha256
+          echo "ZIP SHA256: $(cat dist.zip.sha256)"
+
+      - name: 计算 Release 版本号与标题
+        id: release_meta
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+            NAME="Release $TAG"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            NAME="Release $TAG"
+          else
+            VERSION=$(node -p "require('./package.json').version || '1.0.0'")
+            TAG="v${VERSION}.${{ github.run_number }}"
+            NAME="Release $TAG"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: 发布 GitHub Release 并上传 dist.zip
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist.zip
+            dist.zip.sha256
+          body: |
+            ### 📦 Cloudflare Pages 全栈极速部署包
+
+            本 Release 包含一键全栈部署包 **`dist.zip`**（已内置前端三栏工作台与 `_worker.js` 边缘 Functions 代理）。
+
+            #### 🚀 零门槛部署教程 (10 秒上线)：
+            1. 下载下方的 **`dist.zip`**；
+            2. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/) -> **Workers 和 Pages** -> **创建应用程序** -> **Pages** -> **直接上传 (Direct Upload)**；
+            3. 输入项目名称（如 `cf-outlook`），将 `dist.zip` 拖拽上传并点击 **部署站点 (Deploy site)**；
+            4. 部署完成即可直接打开分配的 `*.pages.dev` 域名，全功能开箱即用！
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
