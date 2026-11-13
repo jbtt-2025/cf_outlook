@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"cf_outlook/common"
 	"cf_outlook/model"
 	"cf_outlook/service"
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,7 @@ func GetStatus(c *gin.Context) {
 			"success":   true,
 			"has_admin": false,
 			"db_ready":  false,
+			"version":   common.Version,
 		})
 		return
 	}
@@ -41,6 +43,7 @@ func GetStatus(c *gin.Context) {
 		"success":   true,
 		"has_admin": count > 0,
 		"db_ready":  true,
+		"version":   common.Version,
 	})
 }
 

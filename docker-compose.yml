@@ -1,8 +1,11 @@
 services:
   cf-outlook:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # 推荐直接使用 GitHub Packages (ghcr.io) 自动构建的官方多架构镜像 (支持 linux/amd64 与 linux/arm64)
+    image: ghcr.io/jbtt-2025/cf_outlook:latest
+    # 如需本地源码构建，可取消下面 build 注释并注释掉上面的 image
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: cf-outlook
     restart: always
     ports:

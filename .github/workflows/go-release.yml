@@ -1,0 +1,196 @@
+name: Go Release & Docker
+
+on:
+  push:
+    branches:
+      - go_version
+    tags:
+      - 'go-v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Optional custom release tag (e.g. go-v1.0.1). Leave empty to auto-generate go-v<base>.<run_number>'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.meta.outputs.app_version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      image_name: ${{ steps.meta.outputs.image_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          BASE_VER=$(grep -E 'Version\s*=' common/config.go | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)
+          if [ -z "$BASE_VER" ]; then
+            BASE_VER="1.0.0"
+          fi
+
+          INPUT_TAG="${{ github.event.inputs.tag_name }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            APP_VER="${TAG#go-v}"
+            APP_VER="${APP_VER#v}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            APP_VER="${TAG#go-v}"
+            APP_VER="${APP_VER#v}"
+          else
+            APP_VER="${BASE_VER}.${{ github.run_number }}"
+            TAG="go-v${APP_VER}"
+          fi
+
+          IMAGE_NAME="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "app_version=${APP_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Prepared release: tag=${TAG}, app_version=${APP_VER}, image=${IMAGE_NAME}"
+
+  build-binaries:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build Frontend Assets
+        run: |
+          npm ci || npm install
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Go Tests
+        run: go test -v -count=1 ./...
+
+      - name: Cross-compile Release Binaries
+        env:
+          APP_VER: ${{ needs.prepare.outputs.app_version }}
+        run: |
+          mkdir -p release_dist
+          LDFLAGS="-s -w -X cf_outlook/common.Version=${APP_VER}"
+
+          build_target() {
+            local os="$1"
+            local arch="$2"
+            local bin_name="cf_outlook"
+            if [ "$os" = "windows" ]; then
+              bin_name="cf_outlook.exe"
+            fi
+            echo "Building ${os}/${arch} (version ${APP_VER})..."
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="${LDFLAGS}" -o "release_dist/${bin_name}" .
+            if [ "$os" = "windows" ]; then
+              (cd release_dist && zip -q "cf_outlook_${APP_VER}_${os}_${arch}.zip" "${bin_name}")
+            else
+              tar -czf "release_dist/cf_outlook_${APP_VER}_${os}_${arch}.tar.gz" -C release_dist "${bin_name}"
+            fi
+            rm -f "release_dist/${bin_name}"
+          }
+
+          build_target linux amd64
+          build_target linux arm64
+          build_target windows amd64
+          build_target darwin arm64
+          build_target darwin amd64
+
+          (cd release_dist && sha256sum cf_outlook_* > checksums.sha256.txt)
+          ls -lh release_dist
+
+      - name: Upload Binary Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cf_outlook-go-binaries
+          path: release_dist/
+          if-no-files-found: error
+
+  build-docker:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ needs.prepare.outputs.image_name }}:latest
+            ${{ needs.prepare.outputs.image_name }}:go-latest
+            ${{ needs.prepare.outputs.image_name }}:${{ needs.prepare.outputs.app_version }}
+            ${{ needs.prepare.outputs.image_name }}:${{ needs.prepare.outputs.tag }}
+          build-args: |
+            APP_VERSION=${{ needs.prepare.outputs.app_version }}
+          labels: |
+            org.opencontainers.image.title=cf_outlook
+            org.opencontainers.image.version=${{ needs.prepare.outputs.app_version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish-release:
+    needs: [prepare, build-binaries, build-docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Binary Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cf_outlook-go-binaries
+          path: release_dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Go Edition ${{ needs.prepare.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release_dist/*
+          body: |
+            ### Docker 镜像 (ghcr.io 多架构: `linux/amd64` / `linux/arm64`)
+            ```bash
+            docker pull ${{ needs.prepare.outputs.image_name }}:${{ needs.prepare.outputs.tag }}
+            # 或拉取最新镜像:
+            docker pull ${{ needs.prepare.outputs.image_name }}:latest
+            ```
+
+            ### 单文件二进制下载
+            各平台纯静态单一可执行文件（已内嵌前端资源，无需额外依赖）及 SHA256 校验文件请见下方附件。

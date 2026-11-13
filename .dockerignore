@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+dist
+dist.zip
+release_dist
+.wrangler
+.env
+.env.*
+data
+*.db
+*.db-wal
+*.db-shm
+*.exe
+*.log
+cf_outlook
