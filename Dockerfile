@@ -1,5 +1,5 @@
 # 阶段 1: 编译前端静态产物
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /web
 COPY package.json package-lock.json* ./
 RUN npm ci || npm install
